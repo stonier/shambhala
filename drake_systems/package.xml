@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>drake_systems</name>
+  <version>0.1.0</version>
+  <description>
+    Simple experiments with drake systems.
+  </description>
+  <author>Daniel Stonier</author>
+  <maintainer email="d.stonier@gmail.com">Daniel Stonier</maintainer>
+  <license>BSD</license>
+  <url type="website">https://github.com/stonier/shambhala</url>
+  <url type="repository">https://github.com/stonier/shambhala</url>
+  <url type="bugtracker">https://github.com/stonier/shambhala/issues</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <build_depend>ecl_build</build_depend>
+
+  <!--
+  <build_depend>drake_ros</build_depend>
+  <exec_depend>drake_ros</exec_depend>
+  -->
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
+
+
