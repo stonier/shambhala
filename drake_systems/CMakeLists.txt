@@ -23,8 +23,9 @@ find_package(drake CONFIG REQUIRED)
 ##############################################################################
 
 #ecl_enable_cxx14_compiler()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra")
-# This one causes problems with YAML errors: -Wl,--no-as-needed
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra -Wl,--no-as-needed")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+# This one causes problems with YAML errors: -Wl,--no-as-needed?
 
 ##############################################################################
 # Sources
