@@ -18,9 +18,9 @@
 #include <drake/systems/framework/value.h>
 #include <drake/systems/framework/context.h>
 #include <drake/systems/framework/diagram.h>
+#include <drake/systems/framework/event.h>
 #include <drake/systems/framework/diagram_builder.h>
 #include <drake/systems/framework/leaf_system.h>
-//#include <drake/systems/framework/vector_base.h>
 
 /*****************************************************************************
  * Methods
@@ -47,30 +47,38 @@ void Foo::increment() {
 
 class FooSystem : public drake::systems::LeafSystem<double> {
 public:
-//	DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(FooSystem)
-    FooSystem(const Foo& foo, const std::shared_ptr<Foo>& foo_ptr);
+  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(FooSystem)
+  FooSystem(const std::shared_ptr<Foo>& foo_ptr);
 private:
-    void DoCalcUnrestrictedUpdate(
-          const drake::systems::Context<double>& context,
-          const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& events,
-          drake::systems::State<double>* state) const;
-    std::shared_ptr<Foo> foo_ptr;
+  typedef drake::systems::PublishEvent<double>::PublishEvent::PublishCallback PublishCallback;
+//  typedef std::function<void(const drake::systems::Context<double>&, const drake::systems::PublishEvent<T>&)> PublishCallback;
+
+  void DoCalcUnrestrictedUpdate(
+      const drake::systems::Context<double>& context,
+      const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& events,
+      drake::systems::State<double>* state) const;
+
+  std::shared_ptr<Foo> foo_ptr;
 };
 
-FooSystem::FooSystem(const Foo& foo, const std::shared_ptr<Foo>& foo_ptr) : foo_ptr(foo_ptr) {
-    std::cout << "FooSystem::FooSystem()" << std::endl;
-    // unrestricted is not a continuous/discrete time system, lets you access and update a mutable State
-    this->DeclarePeriodicUnrestrictedUpdate(1.0);
-    //int DeclareAbstractState(std::unique_ptr<AbstractValue> abstract_state) {
-    this->DeclareAbstractState(drake::systems::AbstractValue::Make(foo)); // std::make_unique<AbstractValue>());
+FooSystem::FooSystem(const std::shared_ptr<Foo>& foo_ptr) : foo_ptr(foo_ptr) {
+  std::cout << "FooSystem::FooSystem()" << std::endl;
+  // unrestricted is not a continuous/discrete time system, lets you access and update a mutable State
+  this->DeclarePeriodicUnrestrictedUpdate(1.0);
+  this->DeclareAbstractState(drake::systems::AbstractValue::Make(*foo_ptr));
 
-    // this->DeclareInputPort(drake::systems::kVectorValued, 1);
-    // Adding one generalized position and one generalized velocity.
-    // A 2D output vector for position and velocity.
-    // this->DeclareVectorOutputPort(drake::systems::BasicVector<T>(2),
-    //                                 &Particle::CopyStateOut);
+  PublishCallback callback = [this](
+      const drake::systems::Context<double>& c,
+      const drake::systems::PublishEvent<double>&)
+  {
+    std::cout << "Publish Event Callback" << std::endl;
+  };
 }
 
+/**
+ * This can be a speculative update!
+ * You don't want to update external storage here, since it may need to get rewound.
+ */
 void FooSystem::DoCalcUnrestrictedUpdate(
           const drake::systems::Context<double>& /* context */,
           const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& /* events */,
@@ -91,15 +99,15 @@ void FooSystem::DoCalcUnrestrictedUpdate(
 
 class Diagram : public drake::systems::Diagram<double> {
 public:
-	explicit Diagram(const Foo& foo, const std::shared_ptr<Foo>& foo_ptr);
+	explicit Diagram(const std::shared_ptr<Foo>& foo_ptr);
 
 	std::unique_ptr<drake::systems::Context<double>> CreateContext() const;
 };
 
-Diagram::Diagram(const Foo& foo, const std::shared_ptr<Foo>& foo_ptr) {
+Diagram::Diagram(const std::shared_ptr<Foo>& foo_ptr) {
 	std::cout << "Diagram::Diagram();" << std::endl;
 	drake::systems::DiagramBuilder<double> builder;
-	builder.template AddSystem<FooSystem>(foo, foo_ptr);
+	builder.template AddSystem<FooSystem>(foo_ptr);
 	builder.BuildInto(this);
 }
 
@@ -121,16 +129,14 @@ int main(int /*argc*/, char** /*argv*/) {
   std::cout << "***********************************************************" << std::endl;
   std::cout << std::endl;
 
-  Foo foo;
   std::shared_ptr<Foo> foo_ptr = std::make_shared<Foo>();
-  auto diagram = std::make_unique<Diagram>(foo, foo_ptr);
+  auto diagram = std::make_unique<Diagram>(foo_ptr);
   auto context = diagram->CreateContext();
   auto simulator = std::make_unique<drake::systems::Simulator<double>>(*diagram, std::move(context));
   simulator->set_target_realtime_rate(1.0);
   simulator->Initialize();
   simulator->StepTo(10.0);
-  // This is not the foo in the context-state, it is copied in...
-  std::cout << "External Foo: " << foo.count() << std::endl;
+
   std::cout << "External FooPtr: " << foo_ptr->count() << std::endl;
   return 0;
 }

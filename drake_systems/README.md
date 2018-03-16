@@ -1,8 +1,23 @@
 # Drake Systems
 
-## Internal Storage - Abstract State / AbstractValue
+## General Notes
 
-It is a type-erased container. What does this mean to our use case?
+### Continuous / Discrete / Unrestricted
+
+* Continous: specify the system in terms of continuous derivatives and let the integrator worry about the machinery
+* Discrete: specify the system in terms of discrete equations and let the integrator worry about the machinery
+
+In both cases, there are specific state types representative of the kind of system.
+
+* Unrestricted: save anything as the state and provide your own update mechanism
+
+
+### Internal Storage - Abstract State / AbstractValue
+
+This is oft used as the storage for unrestricted updates (because you're playing around with whatever
+the hell you want).
+
+It is a type-erased container, bit like `std::any`.
 
 When we declare abstract state via:
 
@@ -10,8 +25,8 @@ When we declare abstract state via:
     this->DeclareAbstractState(drake::systems::AbstractValue::Make(Foo())); // std::make_unique<AbstractValue>());
 ```
 
-we are actually sending a copy/clone of that to the state's storage. **The original instance
-will not be updated.**
+we are actually sending a copy/clone of that to the state's storage (can also move a unique pointer in).
+**The original instance will not be updated.**
 
 ```
   // This overload is for copyable T
@@ -30,6 +45,11 @@ will not be updated.**
       : value_{Traits::to_storage(std::move(v))} {}
 ```
 
-## External Storage
+## Use Cases
 
-If you need to utilise external storage, just pass in a pointer to the system instance and utilise that in the update step.
+### External Storage / Proxy'ing
+
+* Shared pointer into your leaf system
+* Copy the data structure part of that in as AbstractValue state.
+* Use `DoCalcUnrestrictedUpdate` to update the internal state. This is speculative and may get unwound!
+* Use some publishing machinery to pass the internal storage back to the external storage via the pointer
