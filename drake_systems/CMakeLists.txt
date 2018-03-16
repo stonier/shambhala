@@ -2,7 +2,7 @@
 # Cmake
 ##############################################################################
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5.1)
 project(drake_systems)
 
 ##############################################################################
@@ -16,9 +16,7 @@ find_package(drake CONFIG REQUIRED)
 # Project Configuration
 ##############################################################################
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra -Wl,--no-as-needed")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-# This one causes problems with YAML errors: -Wl,--no-as-needed?
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -Wextra")
 
 ##############################################################################
 # Sources
