@@ -6,6 +6,11 @@
  * by the drake diagram.
  *
  * e.g. dynamic part of maliput traffic agents, delphyne mhdm agent.
+ *
+ * It tests the following capabilities:
+ *  - initialising from and publishing to external storage
+ *  - updating periodically
+ *  - TODO: updating on an external trigger
  **/
 /*****************************************************************************
 ** Disable check
@@ -32,6 +37,7 @@ class Foo {
 public:
 	Foo();
 	void increment();
+	void setCount(const int& count) { counter = count;}
 	int count() const { return counter; }
 private:
 	int counter;
@@ -51,38 +57,81 @@ public:
   FooSystem(const std::shared_ptr<Foo>& foo_ptr);
 private:
   typedef drake::systems::PublishEvent<double>::PublishEvent::PublishCallback PublishCallback;
-//  typedef std::function<void(const drake::systems::Context<double>&, const drake::systems::PublishEvent<T>&)> PublishCallback;
+
+  void DoPublish(
+      const drake::systems::Context<double>& context,
+      const std::vector<const drake::systems::PublishEvent<double>*>& events) const override;
+
+  void DoPublishEventUpdate(
+      const drake::systems::Context<double>& context,
+      const drake::systems::PublishEvent<double>& event);
 
   void DoCalcUnrestrictedUpdate(
       const drake::systems::Context<double>& context,
       const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& events,
-      drake::systems::State<double>* state) const;
+      drake::systems::State<double>* state) const override;
 
   std::shared_ptr<Foo> foo_ptr;
 };
 
 FooSystem::FooSystem(const std::shared_ptr<Foo>& foo_ptr) : foo_ptr(foo_ptr) {
   std::cout << "FooSystem::FooSystem()" << std::endl;
-  // unrestricted is not a continuous/discrete time system, lets you access and update a mutable State
-  this->DeclarePeriodicUnrestrictedUpdate(1.0);
-  this->DeclareAbstractState(drake::systems::AbstractValue::Make(*foo_ptr));
 
-  PublishCallback callback = [this](
-      const drake::systems::Context<double>& c,
-      const drake::systems::PublishEvent<double>&)
-  {
-    std::cout << "Publish Event Callback" << std::endl;
-  };
+  this->set_name("foo");
+
+  // Use this to periodically update the system's internal copy of foo.
+  // Note: unrestricted gives permission to update arbitrary values on the state.
+  double period = 1.0;
+  this->DeclarePeriodicUnrestrictedUpdate(period);
+
+  // No need to declare a periodic publish update since that will automagically
+  // trigger if a speculative unrestricted update is accepted
+  // this->DeclarePeriodicPublish(period);
+
+  // shift a copy of Foo over onto the state, this will get used for speculative updates
+  this->DeclareAbstractState(drake::systems::AbstractValue::Make(*foo_ptr));
 }
+
+void FooSystem::DoPublish(
+    const drake::systems::Context<double>& context,
+    const std::vector<const drake::systems::PublishEvent<double>*>& events) const
+{
+  std::cout << "Do Publish Callback" << std::endl;
+//  for (const drake::systems::PublishEvent<double>* event : events) {
+//    std::cout << "Publish Event Trigger Type: ";
+//    if (event->get_trigger_type() == drake::systems::Event<double>::TriggerType::kForced) {
+//      std::cout << "forced" << std::endl;
+//    } else if (event->get_trigger_type() == drake::systems::Event<double>::TriggerType::kTimed) {
+//      std::cout << "timed" << std::endl;
+//    } else if (event->get_trigger_type() == drake::systems::Event<double>::TriggerType::kPeriodic) {
+//      std::cout << "periodic" << std::endl;
+//    } else {
+//      std::cout << "other" << std::endl;
+//    }
+//}
+
+  const drake::systems::AbstractValues& foo_absolute_values = context.get_abstract_state();
+  const Foo& foo = foo_absolute_values.get_value(0).template GetValue<Foo>();
+  int count = foo_ptr->count();
+  foo_ptr->setCount(foo.count());
+  std::cout << "FooPtr: " << count << "->" << foo_ptr->count() << std::endl;
+}
+
+//void FooSystem::DoPublishEventUpdate(
+//    const drake::systems::Context<double>& /* context */,
+//    const drake::systems::PublishEvent<double>& /* event */)
+//{
+//  std::cout << "Publish Event Callback" << std::endl;
+//}
 
 /**
  * This can be a speculative update!
  * You don't want to update external storage here, since it may need to get rewound.
  */
 void FooSystem::DoCalcUnrestrictedUpdate(
-          const drake::systems::Context<double>& /* context */,
-          const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& /* events */,
-          drake::systems::State<double>* state) const
+    const drake::systems::Context<double>& /* context */,
+    const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& /* events */,
+    drake::systems::State<double>* state) const
 {
 	std::cout << "Unrestricted update event" << std::endl;
 	drake::systems::AbstractValues& foo_absolute_values = state->get_mutable_abstract_state();
@@ -92,9 +141,6 @@ void FooSystem::DoCalcUnrestrictedUpdate(
 	int count = foo.count();
 	foo.increment();
 	std::cout << "Foo: " << count << "->" << foo.count() << std::endl;
-	count = foo_ptr->count();
-	foo_ptr->increment();
-	std::cout << "FooPtr: " << count << "->" << foo_ptr->count() << std::endl;
 }
 
 class Diagram : public drake::systems::Diagram<double> {
