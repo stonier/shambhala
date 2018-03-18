@@ -2,22 +2,10 @@
 
 ## General Notes
 
-### Continuous / Discrete / Unrestricted
+### Abstract State
 
-* Continous: specify the system in terms of continuous derivatives and let the integrator worry about the machinery
-* Discrete: specify the system in terms of discrete equations and let the integrator worry about the machinery
-
-In both cases, there are specific state types representative of the kind of system.
-
-* Unrestricted: save anything as the state and provide your own update mechanism
-
-
-### Internal Storage - Abstract State / AbstractValue
-
-This is oft used as the storage for unrestricted updates (because you're playing around with whatever
-the hell you want).
-
-It is a type-erased container, bit like `std::any`.
+Abstract values are used for unrestricted updates when you're playing around with whatever
+tickles your fancy. It is a type-erased container, bit like `std::any`.
 
 When we declare abstract state via:
 
@@ -45,11 +33,26 @@ we are actually sending a copy/clone of that to the state's storage (can also mo
       : value_{Traits::to_storage(std::move(v))} {}
 ```
 
+### Speculative Updates
+
+Drake has the ability to rewind update steps if necessary. To enable this, it first makes a speculative update.
+Any Continuous/Discrete/Unrestricted update is a speculative update. If there are tasks you need to do that
+cannot be rewound, e.g. updating external storage or sending a message out on middleware, use the publishing
+system. Publishing events are automagically forced upon the acceptance of speculative updates. e.g. If
+`DoCalcUnrestrictedUpdates` is processed and accepted, then it will automatically trigger a publishing event
+that can be processed in `DoPublish`.
+
+### Update Types - Continuous / Discrete / Unrestricted
+
+* Continous: specify the system in terms of continuous derivatives and let the integrator worry about the machinery
+* Discrete: specify the system in terms of discrete equations and let the integrator worry about the machinery
+
+In both cases, there are specific state types representative of the kind of system.
+
+* Unrestricted: save anything as the state and provide your own update mechanism
+
 ## Use Cases
 
-### External Storage / Proxy'ing
+### Updating External Objects
 
-* Shared pointer into your leaf system
-* Copy the data structure part of that in as AbstractValue state.
-* Use `DoCalcUnrestrictedUpdate` to update the internal state. This is speculative and may get unwound!
-* Use some publishing machinery to pass the internal storage back to the external storage via the pointer
+* [demo_external_object](src/external_object.cpp)

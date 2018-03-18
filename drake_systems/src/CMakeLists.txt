@@ -1,8 +1,6 @@
 ##############################################################################
 # Macros
 ##############################################################################
-#find_package(yaml)
-#message(STATUS "yaml....${yaml_LIBRARIES}")
 
 macro(shambhala_add_demo name)
   add_executable(demo_${name} ${name}.cpp)
@@ -15,4 +13,4 @@ endmacro()
 # Executables
 ##############################################################################
 
-shambhala_add_demo(storage)
+shambhala_add_demo(external_object)

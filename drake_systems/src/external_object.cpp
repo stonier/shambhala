@@ -1,16 +1,37 @@
 /**
- * @brief A simple drake system with updates to an external class
+ * @brief A simple drake system that updates an external object.
  *
- * Representative use case for algorithms, with their own state,
- * that exist outside a drake diagram but need to be updated
- * by the drake diagram.
+ * This example demonstrates use of a drake system to be responsible
+ * for updating, but not the storage of the object under consideration.
  *
- * e.g. dynamic part of maliput traffic agents, delphyne mhdm agent.
+ * One example of this would be traffic light entities in a simulation
+ * that are maintained by the simulation ground truth layer but passed
+ * to the update engine (potentially drake or other) for switching
+ * the state. The actual traffic light object must be accessible at
+ * the ground truth level to share data with the visual rendering
+ * engine as well as provide details to a ground truth api for other
+ * parts of the simulation (e.g. logging or the ego car software).
  *
  * It tests the following capabilities:
+ *
  *  - initialising from and publishing to external storage
  *  - updating periodically
  *  - TODO: updating on an external trigger
+ *    (e.g. human-interactive trigger for development workflows)
+ *  - TODO: auto-differentiable handling
+ *
+ * How (key point is in how to handle speculative updates):
+ *
+ *  - A pointer to the external object is shared with the leaf system
+ *    (for minimality: this could be structs of the external object's data)
+ *  - A copy of the external object is added to the system's Abstract State
+ *    (this copy is effectively 'cache' the state of speculative updates
+ *  - Unrestricted updates are called to update the internal copy
+ *    (these are the speculative updates)
+ *  - If an unrestricted update is confirmed, it triggers a publishing event
+ *  - The external copy is updated from the abstract state
+ *    (up to the user to handle multi-thread get/set concerns if necessary)
+ *
  **/
 /*****************************************************************************
 ** Disable check
@@ -94,21 +115,13 @@ FooSystem::FooSystem(const std::shared_ptr<Foo>& foo_ptr) : foo_ptr(foo_ptr) {
 
 void FooSystem::DoPublish(
     const drake::systems::Context<double>& context,
-    const std::vector<const drake::systems::PublishEvent<double>*>& events) const
+    const std::vector<const drake::systems::PublishEvent<double>*>& /* events */) const
 {
+  // If the event is a consequence of an unrestricted update, it will be of type kForced
+  //
+  // Q: Is there a way to work directly with the publish event callback system?
+
   std::cout << "Do Publish Callback" << std::endl;
-//  for (const drake::systems::PublishEvent<double>* event : events) {
-//    std::cout << "Publish Event Trigger Type: ";
-//    if (event->get_trigger_type() == drake::systems::Event<double>::TriggerType::kForced) {
-//      std::cout << "forced" << std::endl;
-//    } else if (event->get_trigger_type() == drake::systems::Event<double>::TriggerType::kTimed) {
-//      std::cout << "timed" << std::endl;
-//    } else if (event->get_trigger_type() == drake::systems::Event<double>::TriggerType::kPeriodic) {
-//      std::cout << "periodic" << std::endl;
-//    } else {
-//      std::cout << "other" << std::endl;
-//    }
-//}
 
   const drake::systems::AbstractValues& foo_absolute_values = context.get_abstract_state();
   const Foo& foo = foo_absolute_values.get_value(0).template GetValue<Foo>();
@@ -117,50 +130,39 @@ void FooSystem::DoPublish(
   std::cout << "FooPtr: " << count << "->" << foo_ptr->count() << std::endl;
 }
 
-//void FooSystem::DoPublishEventUpdate(
-//    const drake::systems::Context<double>& /* context */,
-//    const drake::systems::PublishEvent<double>& /* event */)
-//{
-//  std::cout << "Publish Event Callback" << std::endl;
-//}
-
-/**
- * This can be a speculative update!
- * You don't want to update external storage here, since it may need to get rewound.
- */
 void FooSystem::DoCalcUnrestrictedUpdate(
     const drake::systems::Context<double>& /* context */,
     const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& /* events */,
     drake::systems::State<double>* state) const
 {
-	std::cout << "Unrestricted update event" << std::endl;
-	drake::systems::AbstractValues& foo_absolute_values = state->get_mutable_abstract_state();
+  // This can be a speculative update! Don't update external storage here, it may be rewound
+  std::cout << "Unrestricted update event" << std::endl;
+  drake::systems::AbstractValues& foo_absolute_values = state->get_mutable_abstract_state();
 
-	// Don't trust auto, it will do Foo foo, which means changes won't last beyond this scope
-	Foo& foo = foo_absolute_values.get_mutable_value(0).template GetMutableValue<Foo>();
-	int count = foo.count();
-	foo.increment();
-	std::cout << "Foo: " << count << "->" << foo.count() << std::endl;
+  Foo& foo = foo_absolute_values.get_mutable_value(0).template GetMutableValue<Foo>();
+  int count = foo.count();
+  foo.increment();
+  std::cout << "Foo: " << count << "->" << foo.count() << std::endl;
 }
 
 class Diagram : public drake::systems::Diagram<double> {
 public:
-	explicit Diagram(const std::shared_ptr<Foo>& foo_ptr);
+  explicit Diagram(const std::shared_ptr<Foo>& foo_ptr);
 
-	std::unique_ptr<drake::systems::Context<double>> CreateContext() const;
+  std::unique_ptr<drake::systems::Context<double>> CreateContext() const;
 };
 
 Diagram::Diagram(const std::shared_ptr<Foo>& foo_ptr) {
-	std::cout << "Diagram::Diagram();" << std::endl;
-	drake::systems::DiagramBuilder<double> builder;
-	builder.template AddSystem<FooSystem>(foo_ptr);
-	builder.BuildInto(this);
+  std::cout << "Diagram::Diagram();" << std::endl;
+  drake::systems::DiagramBuilder<double> builder;
+  builder.template AddSystem<FooSystem>(foo_ptr);
+  builder.BuildInto(this);
 }
 
 std::unique_ptr<drake::systems::Context<double>> Diagram::CreateContext() const {
-	std::cout << "Diagram::CreateContext();" << std::endl;
-	auto context = this->AllocateContext();
-	return context;
+  std::cout << "Diagram::CreateContext();" << std::endl;
+  auto context = this->AllocateContext();
+  return context;
 }
 
 /*****************************************************************************
