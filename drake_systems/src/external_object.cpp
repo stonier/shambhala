@@ -75,7 +75,7 @@ void Foo::increment() {
 class FooSystem : public drake::systems::LeafSystem<double> {
 public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(FooSystem)
-  FooSystem(const std::shared_ptr<Foo>& foo_ptr);
+  FooSystem(Foo& foo_ptr);
 private:
   typedef drake::systems::PublishEvent<double>::PublishEvent::PublishCallback PublishCallback;
 
@@ -92,10 +92,10 @@ private:
       const std::vector<const drake::systems::UnrestrictedUpdateEvent<double>*>& events,
       drake::systems::State<double>* state) const override;
 
-  std::shared_ptr<Foo> foo_ptr;
+  Foo& foo_ptr;
 };
 
-FooSystem::FooSystem(const std::shared_ptr<Foo>& foo_ptr) : foo_ptr(foo_ptr) {
+FooSystem::FooSystem(Foo& foo_ptr) : foo_ptr(foo_ptr) {
   std::cout << "FooSystem::FooSystem()" << std::endl;
 
   this->set_name("foo");
@@ -110,7 +110,7 @@ FooSystem::FooSystem(const std::shared_ptr<Foo>& foo_ptr) : foo_ptr(foo_ptr) {
   // this->DeclarePeriodicPublish(period);
 
   // shift a copy of Foo over onto the state, this will get used for speculative updates
-  this->DeclareAbstractState(drake::systems::AbstractValue::Make(*foo_ptr));
+  this->DeclareAbstractState(drake::systems::AbstractValue::Make(foo_ptr));
 }
 
 void FooSystem::DoPublish(
@@ -125,9 +125,9 @@ void FooSystem::DoPublish(
 
   const drake::systems::AbstractValues& foo_absolute_values = context.get_abstract_state();
   const Foo& foo = foo_absolute_values.get_value(0).template GetValue<Foo>();
-  int count = foo_ptr->count();
-  foo_ptr->setCount(foo.count());
-  std::cout << "FooPtr: " << count << "->" << foo_ptr->count() << std::endl;
+  int count = foo_ptr.count();
+  foo_ptr.setCount(foo.count());
+  std::cout << "FooPtr: " << count << "->" << foo_ptr.count() << std::endl;
 }
 
 void FooSystem::DoCalcUnrestrictedUpdate(
@@ -147,12 +147,12 @@ void FooSystem::DoCalcUnrestrictedUpdate(
 
 class Diagram : public drake::systems::Diagram<double> {
 public:
-  explicit Diagram(const std::shared_ptr<Foo>& foo_ptr);
+  explicit Diagram(Foo& foo_ptr);
 
   std::unique_ptr<drake::systems::Context<double>> CreateContext() const;
 };
 
-Diagram::Diagram(const std::shared_ptr<Foo>& foo_ptr) {
+Diagram::Diagram(Foo& foo_ptr) {
   std::cout << "Diagram::Diagram();" << std::endl;
   drake::systems::DiagramBuilder<double> builder;
   builder.template AddSystem<FooSystem>(foo_ptr);
@@ -178,7 +178,7 @@ int main(int /*argc*/, char** /*argv*/) {
   std::cout << std::endl;
 
   std::shared_ptr<Foo> foo_ptr = std::make_shared<Foo>();
-  auto diagram = std::make_unique<Diagram>(foo_ptr);
+  auto diagram = std::make_unique<Diagram>(*foo_ptr);
   auto context = diagram->CreateContext();
   auto simulator = std::make_unique<drake::systems::Simulator<double>>(*diagram, std::move(context));
   simulator->set_target_realtime_rate(1.0);
